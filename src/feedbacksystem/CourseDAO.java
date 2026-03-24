@@ -14,7 +14,7 @@ public class CourseDAO {
 
         try {
 
-            Connection conn = DBConnect.getConnection();
+            Connection conn = DBConnection.getConnection();
 
             if (conn == null) {
                 JOptionPane.showMessageDialog(null, "Database connection failed!");

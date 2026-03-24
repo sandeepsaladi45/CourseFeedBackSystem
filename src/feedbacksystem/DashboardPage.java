@@ -1,33 +1,40 @@
 package feedbacksystem;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.*;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.util.HashMap;
 
 public class DashboardPage extends JFrame {
-	
-	//private int[] ratings = new int[5]; 
-	//private JTextArea commentArea;
-	
-	private java.util.HashMap<String,Integer> ratings = new java.util.HashMap<>();
-	private JTextArea commentArea;
-	
+
+    private int studentSno;
+    private String studentName;
+    private String studentEmail;
+
     private CardLayout cardLayout;
     private JPanel contentPanel;
+    private CardLayout rootCardLayout;
+    private JPanel rootCardPanel;
 
-    private JLabel welcomeLabel;
-    private JButton dashboardBtn;
+    // Feedback Variables
+    private HashMap<String, Integer> ratings = new HashMap<>();
+    private JTextArea commentArea;
+    private JButton activeNav; // Track currently selected menu item
+    private JComboBox<String> semesterDropdown;
+    private JPanel dynamicSubjectsPanel;
+    private int currentExpectedSubjects = 5;
+    private JScrollPane formScrollPane;
 
-    private JPanel menuPanel;
-    private JPanel menuBox;
-    private JPanel feedbackPanel;
+    public DashboardPage(int sno, String name, String email) {
+        this.studentSno = sno;
+        this.studentName = name;
+        this.studentEmail = email;
 
-    public DashboardPage() {
-
-        setTitle("Course Feedback System");
-        setSize(1000,650);
+        setTitle("Course Feedback System - Dashboard");
+        setSize(1100, 700);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
@@ -35,396 +42,579 @@ public class DashboardPage extends JFrame {
         mainPanel.setLayout(new BorderLayout());
         add(mainPanel);
 
-        // HEADER
-        JPanel header = new JPanel(new BorderLayout());
-        header.setOpaque(false);
-        header.setBorder(BorderFactory.createEmptyBorder(20,30,20,30));
+        rootCardLayout = new CardLayout();
+        rootCardPanel = new JPanel(rootCardLayout);
+        rootCardPanel.setOpaque(false);
+        mainPanel.add(rootCardPanel, BorderLayout.CENTER);
 
-        JLabel title = new JLabel("Course Feedback System");
-        title.setFont(new Font("Segoe UI",Font.BOLD,22));
-        title.setForeground(Color.WHITE);
+        // Landing Page Screen
+        JPanel landingPage = createLandingPage();
+        rootCardPanel.add(landingPage, "LANDING");
 
-        header.add(title,BorderLayout.WEST);
+        // Dashboard Overlay Screen
+        JPanel dashboardView = new JPanel(new BorderLayout());
+        dashboardView.setOpaque(false);
 
-        JPanel icons = new JPanel(new FlowLayout(FlowLayout.RIGHT,20,0));
-        icons.setOpaque(false);
+        // Sidebar inside dashboard view
+        JPanel sidebar = createSidebar();
+        dashboardView.add(sidebar, BorderLayout.WEST);
 
-        icons.add(new JLabel("🔔"));
-        icons.add(new JLabel("👤"));
-
-        header.add(icons,BorderLayout.EAST);
-
-        mainPanel.add(header,BorderLayout.NORTH);
-
-        // CONTENT
+        // Content Area inside dashboard view
         cardLayout = new CardLayout();
         contentPanel = new JPanel(cardLayout);
         contentPanel.setOpaque(false);
 
-        contentPanel.add(createWelcomePage(),"WELCOME");
-        contentPanel.add(createMenuPage(),"MENU");
+        contentPanel.add(createSubmitFeedbackCard(), "SUBMIT");
+        contentPanel.add(new FeedbackListView(), "LIST");
 
-        mainPanel.add(contentPanel,BorderLayout.CENTER);
+        dashboardView.add(contentPanel, BorderLayout.CENTER);
+        rootCardPanel.add(dashboardView, "APP_DASHBOARD");
 
-        cardLayout.show(contentPanel,"WELCOME");
+        // Start at Landing
+        rootCardLayout.show(rootCardPanel, "LANDING");
     }
 
-    // ---------------- WELCOME PAGE ----------------
-    private JPanel createWelcomePage(){
-
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setOpaque(false);
-
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(20,20,20,20);
-
-        welcomeLabel = new JLabel("");
-        welcomeLabel.setFont(new Font("Segoe UI",Font.BOLD,80));
-        welcomeLabel.setForeground(Color.WHITE);
-
-        gbc.gridy=0;
-        panel.add(welcomeLabel,gbc);
-
-        dashboardBtn = new JButton("Open Dashboard");
-        dashboardBtn.setFont(new Font("Segoe UI",Font.BOLD,18));
-        dashboardBtn.setBackground(new Color(0,120,255));
-        dashboardBtn.setForeground(Color.WHITE);
-        dashboardBtn.setFocusPainted(false);
-        dashboardBtn.setVisible(false);
-
-        gbc.gridy=1;
-        panel.add(dashboardBtn,gbc);
-
-        startAnimation();
-
-        dashboardBtn.addActionListener(e -> startFadeOut());
-
-        return panel;
-    }
-
-    // ---------------- MENU PAGE ----------------
-    private JPanel createMenuPage(){
-
-        menuPanel = new JPanel(null);
-        menuPanel.setOpaque(false);
-
-        menuBox = new JPanel(new GridLayout(4,1,25,25));
-        menuBox.setOpaque(false);
-
-        // CENTER MENU POSITION
-        menuBox.setBounds(350,180,300,250);
-
-        String[] items = {
-                "Submit Feedback",
-                "My Feedback",
-                "Profile",
-                "Logout"
+    private JPanel createSidebar() {
+        JPanel sidebar = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                // Glass effect fade (Semi-transparent overlay over the main background)
+                Graphics2D g2d = (Graphics2D) g.create();
+                GradientPaint glassPaint = new GradientPaint(
+                    0, 0, new Color(255, 255, 255, 20),
+                    getWidth(), 0, new Color(255, 255, 255, 2)
+                );
+                g2d.setPaint(glassPaint);
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+                g2d.dispose();
+                super.paintComponent(g);
+            }
         };
+        sidebar.setPreferredSize(new Dimension(280, getHeight()));
+        sidebar.setOpaque(false); // Essential! Let main background pass through
+        sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(255, 255, 255, 30)));
 
-        for(String item:items){
+        // Profile Section
+        JPanel profilePanel = new JPanel();
+        profilePanel.setLayout(new BoxLayout(profilePanel, BoxLayout.Y_AXIS));
+        profilePanel.setOpaque(false);
+        profilePanel.setBorder(new EmptyBorder(50, 20, 40, 20));
 
-            JButton btn = new JButton(item);
-            btn.setFont(new Font("Segoe UI",Font.BOLD,26));
-            btn.setForeground(Color.WHITE);
+        JLabel avatar = new JLabel("\uD83D\uDC64", SwingConstants.CENTER); // User emoji
+        avatar.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 70));
+        avatar.setForeground(Color.WHITE);
+        avatar.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            btn.setContentAreaFilled(false);
-            btn.setBorderPainted(false);
-            btn.setFocusPainted(false);
-            btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        JLabel nameLabel = new JLabel(studentName != null ? studentName : "Student", SwingConstants.CENTER);
+        nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        nameLabel.setForeground(Color.WHITE);
+        nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        nameLabel.setBorder(new EmptyBorder(15, 0, 5, 0));
 
-            btn.addMouseListener(new MouseAdapter(){
+        JLabel emailLabel = new JLabel(studentEmail != null ? studentEmail : "student@gmail.com",
+                SwingConstants.CENTER);
+        emailLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        emailLabel.setForeground(new Color(180, 200, 240));
+        emailLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-                public void mouseEntered(MouseEvent e){
-                    btn.setFont(new Font("Segoe UI",Font.BOLD,30));
-                    btn.setForeground(new Color(0,180,255));
-                }
+        profilePanel.add(avatar);
+        profilePanel.add(nameLabel);
+        profilePanel.add(emailLabel);
+        sidebar.add(profilePanel, BorderLayout.NORTH);
 
-                public void mouseExited(MouseEvent e){
-                    btn.setFont(new Font("Segoe UI",Font.BOLD,26));
-                    btn.setForeground(Color.WHITE);
-                }
-            });
+        // Menu Buttons
+        JPanel menuPanel = new JPanel(new GridLayout(5, 1, 0, 15));
+        menuPanel.setOpaque(false);
+        menuPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
-            btn.addActionListener(e->{
+        // Removed Emojis from text to prevent missing font rendering boxes
+        // Change dashboard button behavior to return to landing page
+        JButton homeBtn = createMenuButton("Home / Landing", null);
+        homeBtn.addActionListener(e -> {
+            rootCardLayout.show(rootCardPanel, "LANDING");
+        });
+        menuPanel.add(homeBtn);
+        menuPanel.add(createMenuButton("Submit Feedback", "SUBMIT"));
+        menuPanel.add(createMenuButton("My Feedback", "LIST"));
 
-                if(item.equals("Submit Feedback")){
-                    openFeedbackForm();
-                }
+        // Logout
+        JButton logoutBtn = createMenuButton("Logout", null);
+        logoutBtn.setForeground(new Color(255, 100, 100)); // Red tint for logout
+        logoutBtn.addActionListener(e -> {
+            JOptionPane.showMessageDialog(this, "Logged out successfully!");
+            new LoginPage().setVisible(true);
+            dispose();
+        });
+        menuPanel.add(logoutBtn);
 
-                if(item.equals("Logout")){
-                    JOptionPane.showMessageDialog(null,"Logged Out");
-                    System.exit(0);
-                }
+        sidebar.add(menuPanel, BorderLayout.CENTER);
 
-            });
+        // Automatically set highlighting active on the first button after UI renders
+        SwingUtilities.invokeLater(() -> homeBtn.doClick());
 
-            menuBox.add(btn);
-        }
-
-        menuPanel.add(menuBox);
-
-        return menuPanel;
+        return sidebar;
     }
 
-    // ---------------- FEEDBACK FORM ----------------
-    private JPanel createFeedbackForm(){
+    private JButton createMenuButton(String text, String cardName) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        btn.setForeground(new Color(200, 210, 240)); // Idle soft blue-white
+        btn.setOpaque(false); // Clean transparency for glass bg
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btn.setHorizontalAlignment(SwingConstants.LEFT);
+        btn.setBorder(new EmptyBorder(12, 25, 12, 25));
 
-        feedbackPanel = new JPanel(null);
-
-        // ------------------------------------------------
-        // TRANSPARENT GLASS BACKGROUND
-        // change last value (alpha) if you want darker/lighter
-        // ------------------------------------------------
-        feedbackPanel.setBackground(new Color(20,30,60,120));
-
-        feedbackPanel.setBorder(BorderFactory.createLineBorder(
-                new Color(120,180,255,120),1));
-
-        JLabel title = new JLabel("Semester 1 Feedback");
-        title.setFont(new Font("Segoe UI",Font.BOLD,24));
-        title.setForeground(Color.WHITE);
-        title.setBounds(80,20,250,30);
-
-        feedbackPanel.add(title);
-
-        int y = 80;
-
-        y = addSubject("Mathematics",y);
-        y = addSubject("Programming in C",y);
-        y = addSubject("Physics",y);
-        y = addSubject("Chemistry Lab",y);
-        y = addSubject("Workshop",y);
-
-        JLabel commentLabel = new JLabel("Overall Comment");
-        commentLabel.setForeground(Color.WHITE);
-        commentLabel.setFont(new Font("Segoe UI",Font.BOLD,14));
-        commentLabel.setBounds(40,y,200,20);
-
-        feedbackPanel.add(commentLabel);
-
-        commentArea = new JTextArea();
-        commentArea.setBounds(40,y+25,260,70);
-
-        // transparent textbox
-        commentArea.setBackground(new Color(0,0,0,80));
-        commentArea.setForeground(Color.WHITE);
-        commentArea.setBorder(BorderFactory.createLineBorder(new Color(200,200,200,80)));
-
-        feedbackPanel.add(commentArea);
-
-        JButton submit = new JButton("Submit Feedback");
-        submit.setBounds(90,y+110,180,35);
-
-        submit.setBackground(new Color(0,120,255));
-        submit.setForeground(Color.WHITE);
-        submit.setFocusPainted(false);
-
-        feedbackPanel.add(submit);
-
-        return feedbackPanel;
-    }
-    // ---------------- SUBJECT + STARS ----------------
-    private int addSubject(String subject,int y){
-
-        JLabel subjectLabel = new JLabel(subject);
-        subjectLabel.setForeground(Color.WHITE);
-        subjectLabel.setBounds(40,y,150,25);
-        feedbackPanel.add(subjectLabel);
-
-        JPanel starPanel = new JPanel(new FlowLayout(FlowLayout.LEFT,5,0));
-        starPanel.setOpaque(false);
-        starPanel.setBounds(200,y,150,25);
-
-        JLabel[] stars = new JLabel[5];
-
-        for(int i=0;i<5;i++){
-
-            stars[i] = new JLabel("☆");
-            stars[i].setFont(new Font("Segoe UI Symbol",Font.BOLD,22));
-            stars[i].setForeground(Color.YELLOW);
-
-            int starIndex = i;
-
-            stars[i].addMouseListener(new MouseAdapter(){
-
-                public void mouseClicked(MouseEvent e){
-
-                    ratings.put(subject, starIndex + 1);
-
-                    for(int j=0;j<5;j++){
-
-                        if(j <= starIndex)
-                            stars[j].setText("★");
-                        else
-                            stars[j].setText("☆");
-                    }
+        btn.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) {
+                if (btn != activeNav) {
+                    btn.setForeground(Color.WHITE); // Brighten on hover
                 }
-            });
+            }
 
-            starPanel.add(stars[i]);
-        }
-
-        feedbackPanel.add(starPanel);
-
-        return y + 40;
-    }
-    // ---------------- OPEN FEEDBACK FORM ----------------
-    private void openFeedbackForm(){
-
-        feedbackPanel = createFeedbackForm();
-
-        feedbackPanel.setBounds(1000,160,360,460);
-
-        menuPanel.add(feedbackPanel);
-
-        Timer slide = new Timer(10,null);
-
-        slide.addActionListener(new ActionListener(){
-
-            int menuX = 350;
-            int formX = 1000;
-
-            public void actionPerformed(ActionEvent e){
-
-                menuX -= 8;
-                formX -= 12;
-
-                menuBox.setLocation(menuX,180);
-                feedbackPanel.setLocation(formX,160);
-
-                menuPanel.repaint();
-
-                if(menuX <= 120 && formX <= 520){
-                    slide.stop();
+            public void mouseExited(MouseEvent e) {
+                if (btn != activeNav) {
+                    btn.setForeground(new Color(200, 210, 240)); // Return to normal
                 }
             }
         });
 
-        slide.start();
+        if (cardName != null) {
+            btn.addActionListener(e -> {
+                if (activeNav != null) {
+                    activeNav.setForeground(new Color(200, 210, 240));
+                    activeNav.setBorder(new EmptyBorder(12, 25, 12, 25));
+                }
+                activeNav = btn;
+                btn.setForeground(new Color(255, 60, 90)); // Soft Red/Pink Active highlight
+                btn.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 4, 0, 0, new Color(255, 60, 90)),
+                    new EmptyBorder(12, 21, 12, 25)
+                ));
+                cardLayout.show(contentPanel, cardName);
+            });
+        }
+        return btn;
     }
 
-    // ---------------- WELCOME ANIMATION ----------------
-    private void startAnimation(){
+    private JPanel createLandingPage() {
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setOpaque(false);
 
-        Timer timer = new Timer(150,null);
+        // --- TOP NAV BAR matching the image ---
+        JPanel topNav = new JPanel(new BorderLayout());
+        topNav.setOpaque(false);
+        topNav.setBorder(new EmptyBorder(30, 50, 0, 50));
 
-        timer.addActionListener(new ActionListener(){
+        JLabel logoLabel = new JLabel("Course Feedback System");
+        logoLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        logoLabel.setForeground(Color.WHITE);
+        topNav.add(logoLabel, BorderLayout.WEST);
 
-            int stage=0;
-            int expand=2;
-            boolean grow=true;
+        JPanel navLinks = new JPanel(new FlowLayout(FlowLayout.CENTER, 40, 0));
+        navLinks.setOpaque(false);
+        String[] links = {"Home", "About", "Blog", "Contact us"};
+        for (String link : links) {
+            JLabel lbl = new JLabel(link);
+            lbl.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            lbl.setForeground(new Color(200, 220, 255));
+            lbl.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            navLinks.add(lbl);
+        }
+        topNav.add(navLinks, BorderLayout.CENTER);
 
-            public void actionPerformed(ActionEvent e){
+        JPanel authLinks = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 0));
+        authLinks.setOpaque(false);
+        JLabel loginLbl = new JLabel("Log in");
+        loginLbl.setForeground(Color.WHITE);
+        loginLbl.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        authLinks.add(loginLbl);
 
-                switch(stage){
+        JButton signupBtn = new JButton("Sign up");
+        signupBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        signupBtn.setForeground(Color.WHITE);
+        signupBtn.setBackground(new Color(255, 60, 90)); // Soft red/pink
+        signupBtn.setBorder(new EmptyBorder(6, 20, 6, 20));
+        signupBtn.setFocusPainted(false);
+        authLinks.add(signupBtn);
 
+        topNav.add(authLinks, BorderLayout.EAST);
+
+        wrapper.add(topNav, BorderLayout.NORTH);
+
+        // --- MAIN CONTENT (LEFT ALIGNED) ---
+        JPanel panel = new JPanel(null); // Absolute positioning for exact image matching
+        panel.setOpaque(false);
+
+        JLabel welcomeLabel = new JLabel(""); // For animation
+        welcomeLabel.setFont(new Font("Segoe UI", Font.BOLD, 54)); // Adjusted for image template
+        welcomeLabel.setForeground(Color.WHITE);
+        welcomeLabel.setBounds(80, 150, 800, 80);
+        panel.add(welcomeLabel);
+
+        // Subtext perfectly matching the left-aligned layout
+        JLabel subLabel = new JLabel("<html><div style='width: 350px; line-height: 1.5;'>"
+                + "Your feedback is crucial for continuous improvement. Help us enhance the learning experience "
+                + "by providing honest and constructive reviews for your courses."
+                + "</div></html>");
+        subLabel.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        subLabel.setForeground(new Color(200, 210, 240));
+        subLabel.setBounds(80, 230, 500, 80);
+        panel.add(subLabel);
+
+        // Matching Red Pill Button from the image -> switches to Dashboard
+        JButton seeMoreBtn = new JButton("Dashboard");
+        seeMoreBtn.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        seeMoreBtn.setForeground(Color.WHITE);
+        seeMoreBtn.setBackground(new Color(210, 50, 70)); // Deep vibrant red
+        seeMoreBtn.setBounds(80, 330, 160, 45);
+        seeMoreBtn.setFocusPainted(false);
+        seeMoreBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        seeMoreBtn.setBorder(BorderFactory.createLineBorder(new Color(255, 255, 255, 80), 1, true));
+        seeMoreBtn.addActionListener(e -> {
+            rootCardLayout.show(rootCardPanel, "APP_DASHBOARD");
+            cardLayout.show(contentPanel, "SUBMIT"); // Open submit feedback by default
+        });
+        panel.add(seeMoreBtn);
+
+        wrapper.add(panel, BorderLayout.CENTER);
+
+        // Start Welcome Animation
+        Timer timer = new Timer(150, null);
+        timer.addActionListener(new ActionListener() {
+            int stage = 0;
+            int expand = 2;
+            boolean grow = true;
+
+            public void actionPerformed(ActionEvent e) {
+                switch (stage) {
                     case 0: welcomeLabel.setText("W"); break;
                     case 1: welcomeLabel.setText("We"); break;
-                    case 2: welcomeLabel.setText("Wee"); break;
-
+                    case 2: welcomeLabel.setText("Wel"); break;
                     case 3:
-
-                        if(grow){
+                        if (grow) {
                             expand++;
-                            welcomeLabel.setText("W"+"e".repeat(expand));
-                            if(expand>=8) grow=false;
-                        }
-                        else{
+                            welcomeLabel.setText("W" + "e".repeat(expand));
+                            if (expand >= 8) grow = false;
+                        } else {
                             expand--;
-                            welcomeLabel.setText("W"+"e".repeat(expand));
-                            if(expand<=2) stage++;
+                            welcomeLabel.setText("W" + "e".repeat(expand));
+                            if (expand <= 2) stage++;
                         }
                         return;
-
                     case 4: welcomeLabel.setText("WELCOME"); break;
-
                     case 5:
-                        dashboardBtn.setVisible(true);
-                        timer.stop();
+                        // After animation, show final text
+                        welcomeLabel.setText("Course Feedback System");
+                        subLabel.setVisible(true);
+                        seeMoreBtn.setVisible(true);
+                        ((Timer) e.getSource()).stop();
                         return;
                 }
-
                 stage++;
             }
         });
-
+        
+        // Hide elements initially so only animation is visible
+        subLabel.setVisible(false);
+        seeMoreBtn.setVisible(false);
         timer.start();
+
+        return wrapper;
     }
-
-    // ---------------- FADE OUT ----------------
-    private void startFadeOut(){
-
-        Timer fade = new Timer(40,null);
-
-        fade.addActionListener(new ActionListener(){
-
-            float opacity = 1f;
-
-            public void actionPerformed(ActionEvent e){
-
-                opacity -= 0.05f;
-
-                welcomeLabel.setForeground(new Color(255,255,255,(int)(opacity*255)));
-                dashboardBtn.setForeground(new Color(255,255,255,(int)(opacity*255)));
-
-                if(opacity<=0){
-                    fade.stop();
-                    cardLayout.show(contentPanel,"MENU");
+    
+    private JLabel createLinkButton(String text, String urlString) {
+        JLabel link = new JLabel(text);
+        link.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        link.setForeground(new Color(100, 180, 255));
+        link.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        link.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) {
+                link.setForeground(Color.WHITE);
+                link.setText("<html><u>" + text + "</u></html>");
+            }
+            public void mouseExited(MouseEvent e) {
+                link.setForeground(new Color(100, 180, 255));
+                link.setText(text);
+            }
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new java.net.URI(urlString));
+                } catch (Exception ex) {
+                    ex.printStackTrace();
                 }
             }
         });
-
-        fade.start();
+        return link;
     }
-    
-    private void saveFeedback(){
+
+    // --- SUBMIT FEEDBACK CARD (REDESIGNED) ---
+    private JPanel createSubmitFeedbackCard() {
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setOpaque(false);
+        wrapper.setBorder(new EmptyBorder(30, 60, 30, 60));
+
+        JPanel formPanel = new JPanel(null);
+        formPanel.setBackground(new Color(20, 30, 60, 180));
+        formPanel.setBorder(BorderFactory.createLineBorder(new Color(255, 255, 255, 40), 1));
+
+        JLabel title = new JLabel("Semester Feedback Form");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        title.setForeground(Color.WHITE);
+        title.setBounds(60, 30, 400, 40);
+        formPanel.add(title);
+
+        JLabel semLabel = new JLabel("Select Semester:");
+        semLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        semLabel.setForeground(Color.WHITE);
+        semLabel.setBounds(460, 35, 140, 30);
+        formPanel.add(semLabel);
+
+        String[] semesters = {"1-1", "1-2", "2-1", "2-2", "3-1", "3-2", "4-1", "4-2"};
+        semesterDropdown = new JComboBox<>(semesters);
+        semesterDropdown.setBounds(600, 35, 100, 30);
+        semesterDropdown.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        semesterDropdown.addActionListener(e -> renderSubjects());
+        formPanel.add(semesterDropdown);
+
+        // Likert Scale Headers
+        JPanel headerRow = new JPanel(new GridLayout(1, 5, 10, 0));
+        headerRow.setOpaque(false);
+        headerRow.setBounds(300, 100, 400, 20);
+        String[] headers = {"Poor", "Fair", "Good", "Very Good", "Excellent"};
+        for (String h : headers) {
+            JLabel hl = new JLabel(h, SwingConstants.CENTER);
+            hl.setForeground(new Color(200, 220, 255));
+            hl.setFont(new Font("Segoe UI", Font.BOLD, 12));
+            headerRow.add(hl);
+        }
+        formPanel.add(headerRow);
+
+        dynamicSubjectsPanel = new JPanel(null);
+        dynamicSubjectsPanel.setOpaque(false);
+        dynamicSubjectsPanel.setBounds(0, 120, 800, 600); // Leave space for subjects to render
+        formPanel.add(dynamicSubjectsPanel);
+
+        wrapper.add(formPanel, BorderLayout.CENTER);
+        
+        // Render 1-1 initially
+        renderSubjects();
+        
+        return wrapper;
+    }
+
+    private void renderSubjects() {
+        dynamicSubjectsPanel.removeAll();
+        ratings.clear();
+
+        String sem = (String) semesterDropdown.getSelectedItem();
+        int y = 5;
+
+        if (sem.equals("1-1")) {
+            currentExpectedSubjects = 5;
+            y = addSubjectField(dynamicSubjectsPanel, "Mathematics", y);
+            y = addSubjectField(dynamicSubjectsPanel, "Programming in C", y);
+            y = addSubjectField(dynamicSubjectsPanel, "Physics", y);
+            y = addSubjectField(dynamicSubjectsPanel, "Chemistry Lab", y);
+            y = addSubjectField(dynamicSubjectsPanel, "Workshop", y);
+        } else if (sem.equals("1-2")) {
+            currentExpectedSubjects = 4;
+            // TODO: Uncomment and add subjects identically as 1-1
+            // y = addSubjectField(dynamicSubjectsPanel, "Data Structures", y);
+            // y = addSubjectField(dynamicSubjectsPanel, "English", y);
+            // y = addSubjectField(dynamicSubjectsPanel, "Digital Logic", y);
+            // y = addSubjectField(dynamicSubjectsPanel, "Physics Lab", y);
+            
+            JLabel pending = new JLabel("Subjects for " + sem + " will be added soon.");
+            pending.setFont(new Font("Segoe UI", Font.ITALIC, 16));
+            pending.setForeground(Color.GRAY);
+            pending.setBounds(60, y, 400, 30);
+            dynamicSubjectsPanel.add(pending);
+            y += 40;
+        } else if (sem.equals("2-1")) {
+            currentExpectedSubjects = 0;
+            // TODO: Add subjects for 2-1
+
+            JLabel pending = new JLabel("Subjects for " + sem + " will be added soon.");
+            pending.setFont(new Font("Segoe UI", Font.ITALIC, 16));
+            pending.setForeground(Color.GRAY);
+            pending.setBounds(60, y, 400, 30);
+            dynamicSubjectsPanel.add(pending);
+            y += 40;
+        } else {
+            currentExpectedSubjects = 0;
+            // Catch all for remaining semesters
+            // TODO: Add subjects for 2-2, 3-1, 3-2, 4-1, 4-2
+            
+            JLabel pending = new JLabel("Subjects for " + sem + " will be added soon.");
+            pending.setFont(new Font("Segoe UI", Font.ITALIC, 16));
+            pending.setForeground(Color.GRAY);
+            pending.setBounds(60, y, 400, 30);
+            dynamicSubjectsPanel.add(pending);
+            y += 40;
+        }
+
+        JLabel commentLabel = new JLabel("Overall Comment (Optional):");
+        commentLabel.setForeground(new Color(200, 220, 255));
+        commentLabel.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        commentLabel.setBounds(60, y + 10, 300, 25);
+        dynamicSubjectsPanel.add(commentLabel);
+
+        commentArea = new JTextArea();
+        commentArea.setBounds(60, y + 40, 600, 70);
+        commentArea.setBackground(new Color(8, 15, 35, 200));
+        commentArea.setForeground(Color.WHITE);
+        commentArea.setCaretColor(Color.WHITE);
+        commentArea.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        commentArea.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(255, 255, 255, 40)),
+            new EmptyBorder(10, 10, 10, 10)
+        ));
+        dynamicSubjectsPanel.add(commentArea);
+
+        JButton submitBtn = new JButton("Submit Feedback");
+        submitBtn.setBounds(60, y + 130, 220, 45);
+        submitBtn.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        submitBtn.setBackground(new Color(0, 120, 255));
+        submitBtn.setForeground(Color.WHITE);
+        submitBtn.setFocusPainted(false);
+        submitBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        submitBtn.setBorder(new EmptyBorder(10, 20, 10, 20));
+        submitBtn.addActionListener(e -> saveFeedback());
+        dynamicSubjectsPanel.add(submitBtn);
+
+        dynamicSubjectsPanel.revalidate();
+        dynamicSubjectsPanel.repaint();
+    }
+
+    private int addSubjectField(JPanel panel, String subject, int y) {
+        JLabel subjectLabel = new JLabel(subject);
+        subjectLabel.setForeground(Color.WHITE);
+        subjectLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        subjectLabel.setBounds(60, y, 220, 35);
+        panel.add(subjectLabel);
+
+        // Radio Button Form Matrix
+        JPanel ratingPanel = new JPanel(new GridLayout(1, 5, 10, 0));
+        ratingPanel.setOpaque(false);
+        ratingPanel.setBounds(300, y, 400, 35);
+
+        ButtonGroup group = new ButtonGroup();
+
+        for (int i = 0; i < 5; i++) {
+            JRadioButton rb = new JRadioButton();
+            rb.setOpaque(false);
+            rb.setHorizontalAlignment(SwingConstants.CENTER);
+            rb.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            
+            int ratingVal = i + 1;
+            rb.addActionListener(e -> ratings.put(subject, ratingVal));
+
+            group.add(rb);
+            ratingPanel.add(rb);
+        }
+
+        panel.add(ratingPanel);
+        return y + 45; // Spacing between rows
+    }
+
+    private void saveFeedback() {
+        if (ratings.size() < currentExpectedSubjects || currentExpectedSubjects == 0) {
+            JOptionPane.showMessageDialog(this, "Please select a rating for all subjects before submitting!");
+            return;
+        }
 
         String comment = commentArea.getText();
+        String sem = (String) semesterDropdown.getSelectedItem();
+        // Maps "1-1" -> 11, "2-1" -> 21, etc.
+        int semCode = Integer.parseInt(sem.replace("-", ""));
 
-        try{
-
+        try {
             Connection con = DBConnection.getConnection();
-
             String sql = "INSERT INTO semester_feedback(semester,subject_name,rating,comment) VALUES(?,?,?,?)";
-
             PreparedStatement ps = con.prepareStatement(sql);
 
-            for(String subject : ratings.keySet()){
-
-                ps.setInt(1,1); // semester number
-                ps.setString(2,subject);
-                ps.setInt(3,ratings.get(subject));
-                ps.setString(4,comment);
-
+            for (String subject : ratings.keySet()) {
+                ps.setInt(1, semCode);
+                ps.setString(2, subject);
+                ps.setInt(3, ratings.get(subject));
+                ps.setString(4, comment);
                 ps.executeUpdate();
             }
 
-            JOptionPane.showMessageDialog(this,"Feedback saved successfully!");
-            submit.addActionListener(e -> saveFeedback());
+            JOptionPane.showMessageDialog(this, "Thank you! Feedback saved successfully.");
 
-            commentArea.setText("");
-            ratings.clear();
+            // Clear selections and text
+            renderSubjects();
 
-        }
-        catch(Exception e){
+            // Refresh form UI by instantiating list card again to fetch DB data
+            contentPanel.add(new FeedbackListView(), "LIST");
+            cardLayout.show(contentPanel, "LIST");
+
+            con.close();
+
+        } catch (Exception e) {
             e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Database error: could not save feedback.", "Error",
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
+
     // ---------------- BACKGROUND ----------------
-    class GradientPanel extends JPanel{
-
-        protected void paintComponent(Graphics g){
-
+    class GradientPanel extends JPanel {
+        protected void paintComponent(Graphics g) {
             super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g;
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            Graphics2D g2d=(Graphics2D)g;
+            // Base background
+            g2d.setColor(new Color(12, 22, 45)); // Deep dark blue
+            g2d.fillRect(0, 0, getWidth(), getHeight());
 
-            GradientPaint gp = new GradientPaint(
-                    0,0,new Color(8,20,45),
-                    0,getHeight(),new Color(15,60,130));
+            // Red glow top right
+            RadialGradientPaint r1 = new RadialGradientPaint(
+                    new Point(getWidth(), 0), getWidth() * 0.8f,
+                    new float[]{0.0f, 1.0f},
+                    new Color[]{new Color(210, 50, 70, 180), new Color(12, 22, 45, 0)}
+            );
+            g2d.setPaint(r1);
+            g2d.fillRect(0, 0, getWidth(), getHeight());
 
-            g2d.setPaint(gp);
-            g2d.fillRect(0,0,getWidth(),getHeight());
+            // Blue glow center-left
+            RadialGradientPaint r2 = new RadialGradientPaint(
+                    new Point(100, getHeight() / 2), getWidth() * 0.6f,
+                    new float[]{0.0f, 1.0f},
+                    new Color[]{new Color(40, 90, 150, 150), new Color(12, 22, 45, 0)}
+            );
+            g2d.setPaint(r2);
+            g2d.fillRect(0, 0, getWidth(), getHeight());
+
+            // Draw fluid mesh curves matching the image
+            g2d.setStroke(new BasicStroke(1.2f));
+            for (int i = 0; i < 35; i++) {
+                float alpha = (float) Math.max(0.05, 0.6 - (i * 0.015));
+                g2d.setColor(new Color(255, 180, 200, (int) (alpha * 255)));
+
+                java.awt.geom.Path2D path = new java.awt.geom.Path2D.Float();
+                path.moveTo(0, getHeight() / 2);
+
+                for (int x = 0; x <= getWidth(); x += 15) {
+                    double freq1 = 0.003 + (i * 0.00008);
+                    double freq2 = 0.005 - (i * 0.00003);
+                    double amp1 = 100 + (i * 8);
+                    double amp2 = 80 - (i * 2);
+
+                    double y = (getHeight() / 2.0)
+                            + Math.sin(x * freq1) * amp1
+                            + Math.cos((x + 300) * freq2) * amp2
+                            - Math.sin(x * 0.001) * 80;
+
+                    path.lineTo(x, y);
+                }
+                g2d.draw(path);
+            }
         }
     }
 }

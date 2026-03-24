@@ -4,11 +4,11 @@ import java.sql.*;
 
 public class FeedbackDAO {
 
-    public void addFeedback(Feedback feedback) {
+    public boolean addFeedback(Feedback feedback) {
 
-        String sql = "INSERT INTO feedback(student_id,course_id,rating,comments) VALUES (?,?,?,?)";
+        String sql = "INSERT INTO feedback(student_sno, course_id, rating, comments) VALUES (?, ?, ?, ?)";
 
-        try (Connection conn = DBConnect.getConnection();
+        try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setInt(1, feedback.getStudentId());
@@ -16,21 +16,23 @@ public class FeedbackDAO {
             ps.setInt(3, feedback.getRating());
             ps.setString(4, feedback.getComments());
 
-            ps.executeUpdate();
+            int result = ps.executeUpdate();
+            return result > 0;
 
         } catch (Exception e) {
             e.printStackTrace();
+            return false;
         }
     }
 
     public ResultSet viewFeedback() {
 
         try {
-            Connection conn = DBConnect.getConnection();
+            Connection conn = DBConnection.getConnection();
 
             String sql = "SELECT s.name, c.course_name, f.rating, f.comments " +
                     "FROM feedback f " +
-                    "JOIN students s ON f.student_id = s.student_id " +
+                    "JOIN students s ON f.student_sno = s.sno " +
                     "JOIN courses c ON f.course_id = c.course_id";
 
             Statement st = conn.createStatement();

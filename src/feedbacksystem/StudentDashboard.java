@@ -31,7 +31,7 @@ public class StudentDashboard extends JFrame {
         add(logoutBtn);
 
         feedbackBtn.addActionListener(e -> {
-            new FeedbackPage(studentSno);
+            new FeedbackPage();
             dispose();
         });
 
@@ -41,7 +41,7 @@ public class StudentDashboard extends JFrame {
     private void logout() {
 
         try {
-            Connection conn = DBConnect.getConnection();
+            Connection conn = DBConnection.getConnection();
 
             String sql =
                     "UPDATE STUDENTS SET LOGIN_STATUS = FALSE WHERE SNO = ?";
